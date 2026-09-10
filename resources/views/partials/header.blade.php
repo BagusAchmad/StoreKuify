@@ -1,32 +1,46 @@
-<header class="h-16 bg-white border-b border-slate-200/80 flex items-center justify-between px-6 shrink-0">
+<header class="h-16 bg-white border-b border-slate-200/80 flex items-center justify-between px-3.5 sm:px-6 shrink-0">
     <!-- Left Navigation / Breadcrumbs -->
-    <div class="flex items-center gap-4">
-        <button @click="sidebarOpen = true" class="lg:hidden p-1 rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none">
+    <div class="flex items-center gap-2 sm:gap-4 min-w-0">
+        <button @click="sidebarOpen = true" class="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none shrink-0" aria-label="Buka Navigasi Sidebar">
             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
         </button>
         @if(isset($breadcrumbs) && is_array($breadcrumbs))
-            <div class="text-sm font-bold text-slate-400 flex items-center gap-1.5 flex-wrap">
+            <div class="text-xs sm:text-sm font-bold text-slate-400 flex items-center gap-1 sm:gap-1.5 truncate">
                 @foreach($breadcrumbs as $index => $item)
                     @if(is_array($item) && isset($item['url']))
-                        <a href="{{ $item['url'] }}" class="hover:text-[#1e5cfb] transition duration-100">{{ $item['label'] }}</a>
+                        <a href="{{ $item['url'] }}" class="hover:text-[#1e5cfb] transition duration-100 truncate">{{ $item['label'] }}</a>
                     @else
-                        <span class="{{ $loop->last ? 'text-slate-800' : '' }}">{{ is_array($item) ? $item['label'] : $item }}</span>
+                        <span class="{{ $loop->last ? 'text-slate-800' : '' }} truncate">{{ is_array($item) ? $item['label'] : $item }}</span>
                     @endif
 
                     @if(!$loop->last)
-                        <span class="text-slate-300 font-normal">/</span>
+                        <span class="text-slate-300 font-normal shrink-0">/</span>
                     @endif
                 @endforeach
             </div>
         @else
-            <h2 class="text-base font-extrabold text-slate-800 tracking-tight">{{ $title ?? 'StoreKuify' }}</h2>
+            <h2 class="text-sm sm:text-base font-extrabold text-slate-800 tracking-tight truncate">{{ $title ?? 'StoreKuify' }}</h2>
         @endif
     </div>
 
     <!-- Right Notification & Profile Area -->
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        @if(isset($showCartToggle) && $showCartToggle)
+            <!-- Mobile Cart Button -->
+            <button type="button" @click="cartOpen = true" 
+                class="lg:hidden relative p-2 rounded-xl text-slate-600 hover:text-[#1e5cfb] hover:bg-slate-100 transition focus:outline-none cursor-pointer flex items-center justify-center"
+                aria-label="Buka Keranjang Belanja" title="Keranjang Belanja">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+                <span x-show="cart.length > 0" x-cloak
+                      class="absolute -top-0.5 -right-0.5 h-5 min-w-[20px] px-1 bg-[#1e5cfb] text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm"
+                      x-text="totalItemCount">
+                </span>
+            </button>
+        @endif
         
         <!-- Interactive Notification Bell Dropdown -->
         <div class="relative" x-data="{ notifOpen: false }">

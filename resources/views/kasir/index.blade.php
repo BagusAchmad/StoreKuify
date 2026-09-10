@@ -121,6 +121,9 @@
     get total() {
         return this.subtotal;
     },
+    get totalItemCount() {
+        return this.cart.reduce((sum, item) => sum + item.quantity, 0);
+    },
     
     // Payment helpers
     openPayment() {
@@ -224,32 +227,32 @@
     @endif
 
     <!-- Main Content Area split-screen -->
-    <div class="flex-1 flex flex-col overflow-hidden lg:flex-row">
+    <div class="flex-1 flex flex-col overflow-hidden lg:flex-row relative">
         
         <!-- Left Side: Product Grid -->
         <div class="flex-1 flex flex-col overflow-hidden">
             
             <!-- Header -->
-            @include('partials.header', ['title' => 'Kasir POS'])
+            @include('partials.header', ['title' => 'Kasir POS', 'showCartToggle' => true])
 
             <!-- Product search and filter area -->
-            <div class="p-6 bg-white border-b border-slate-200/80 space-y-4 shrink-0 shadow-sm">
+            <div class="p-3.5 sm:p-6 bg-white border-b border-slate-200/80 space-y-3 sm:space-y-4 shrink-0 shadow-xs">
                 <!-- Search Form -->
-                <form action="{{ Auth::user()->role === 'Owner' ? route('owner.kasir') : route('kasir.pos') }}" method="GET" class="relative max-w-2xl">
+                <form action="{{ Auth::user()->role === 'Owner' ? route('owner.kasir') : route('kasir.pos') }}" method="GET" class="relative w-full max-w-2xl">
                     <input type="hidden" name="category" value="{{ $selectedCategory }}">
 
                     <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <svg class="h-4.5 w-4.5 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                     </div>
                     <input type="text" name="search" value="{{ $search }}"
-                        class="block w-full pl-11 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#1e5cfb] focus:ring-1 focus:ring-[#1e5cfb] transition duration-150"
+                        class="block w-full pl-10 sm:pl-11 pr-9 sm:pr-10 py-2 sm:py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#1e5cfb] focus:ring-1 focus:ring-[#1e5cfb] transition duration-150"
                         placeholder="Cari barang atau scan barcode...">
                     @if($search)
                         <a href="{{ Auth::user()->role === 'Owner' ? route('owner.kasir', ['category' => $selectedCategory]) : route('kasir.pos', ['category' => $selectedCategory]) }}" 
-                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition">
-                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition" aria-label="Hapus pencarian">
+                            <svg class="h-4.5 w-4.5 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </a>
@@ -257,15 +260,15 @@
                 </form>
 
                 <!-- Category Chips list -->
-                <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                <div class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                     <a href="{{ Auth::user()->role === 'Owner' ? route('owner.kasir', array_filter(['search' => $search, 'category' => 'all'])) : route('kasir.pos', array_filter(['search' => $search, 'category' => 'all'])) }}"
-                        class="px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap {{ $selectedCategory === 'all' ? 'bg-[#1e5cfb] text-white shadow-md shadow-blue-500/10' : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80' }}">
+                        class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition whitespace-nowrap {{ $selectedCategory === 'all' ? 'bg-[#1e5cfb] text-white shadow-md shadow-blue-500/10' : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80' }}">
                         Semua
                     </a>
                     
                     @foreach($categories as $category)
                         <a href="{{ Auth::user()->role === 'Owner' ? route('owner.kasir', array_filter(['search' => $search, 'category' => $category->slug])) : route('kasir.pos', array_filter(['search' => $search, 'category' => $category->slug])) }}"
-                            class="px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap {{ $selectedCategory === $category->slug ? 'bg-[#1e5cfb] text-white shadow-md shadow-blue-500/10' : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80' }}">
+                            class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition whitespace-nowrap {{ $selectedCategory === $category->slug ? 'bg-[#1e5cfb] text-white shadow-md shadow-blue-500/10' : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80' }}">
                             {{ $category->name }}
                         </a>
                     @endforeach
@@ -273,11 +276,11 @@
             </div>
 
             <!-- Scrollable product listing container -->
-            <div class="flex-1 overflow-y-auto p-6">
+            <div class="flex-1 overflow-y-auto p-3.5 sm:p-6 pb-28 lg:pb-6">
                 <!-- Errors and warnings -->
                 @error('checkout')
                     <div class="mb-5 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-sm font-semibold flex items-center gap-3">
-                        <svg class="h-5 w-5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                        <svg class="h-5 w-5 text-rose-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                         <span>{{ $message }}</span>
@@ -285,7 +288,7 @@
                 @enderror
 
                 <!-- Products Grid -->
-                <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                     @forelse($products as $product)
                         @php
                             $isOutOfStock = $product->stock <= 0;
@@ -299,10 +302,20 @@
                                 stock: {{ $product->stock }},
                                 image: '{{ $product->image ? asset($product->image) : '' }}'
                              })" 
-                             class="bg-white border border-slate-200/60 rounded-2xl p-4 flex flex-col justify-between shadow-sm transition hover:shadow-md cursor-pointer group select-none relative overflow-hidden active:scale-[0.98] {{ $isOutOfStock ? 'opacity-65 pointer-events-none' : '' }}">
+                             class="bg-white border border-slate-200/70 rounded-2xl p-3 sm:p-4 flex flex-col justify-between shadow-xs transition hover:shadow-md hover:border-blue-200 cursor-pointer group select-none relative overflow-hidden active:scale-[0.98] {{ $isOutOfStock ? 'opacity-60 pointer-events-none' : '' }}"
+                             role="button"
+                             tabindex="0"
+                             @keydown.enter="addToCart({
+                                id: {{ $product->id }},
+                                name: '{{ addslashes($product->name) }}',
+                                selling_price: {{ $product->selling_price }},
+                                stock: {{ $product->stock }},
+                                image: '{{ $product->image ? asset($product->image) : '' }}'
+                             })"
+                             aria-label="Tambah {{ $product->name }} ke keranjang">
                             
                             @if($isOutOfStock)
-                                <div class="absolute inset-0 bg-slate-900/10 backdrop-blur-[0.5px] z-10 flex items-center justify-center">
+                                <div class="absolute inset-0 bg-slate-900/10 backdrop-blur-[0.5px] z-10 flex items-center justify-center p-2">
                                     <span class="bg-rose-600/90 text-white text-[10px] font-extrabold px-3 py-1 rounded-full shadow-md tracking-wider uppercase">
                                         Stok Habis
                                     </span>
@@ -310,7 +323,7 @@
                             @endif
 
                             <div>
-                                <div class="aspect-square bg-slate-50 border border-slate-100 rounded-xl overflow-hidden mb-3.5 flex items-center justify-center shrink-0">
+                                <div class="aspect-square bg-slate-50 border border-slate-100 rounded-xl overflow-hidden mb-2.5 sm:mb-3.5 flex items-center justify-center shrink-0">
                                     @if($product->image)
                                         <img src="{{ asset($product->image) }}" alt="{{ $product->name }}" class="h-full w-full object-cover group-hover:scale-105 transition duration-300">
                                     @else
@@ -320,22 +333,30 @@
                                     @endif
                                 </div>
 
-                                <h4 class="text-xs font-bold text-slate-800 line-clamp-2 leading-tight tracking-tight">{{ $product->name }}</h4>
+                                <h4 class="text-xs sm:text-sm font-bold text-slate-800 line-clamp-2 leading-snug tracking-tight group-hover:text-[#1e5cfb] transition">{{ $product->name }}</h4>
                             </div>
 
-                            <div class="mt-3.5">
-                                <div class="text-sm font-extrabold text-[#1e5cfb]">
-                                    Rp {{ number_format($product->selling_price, 0, ',', '.') }}
+                            <div class="mt-2.5 sm:mt-3 flex items-end justify-between gap-1">
+                                <div class="min-w-0">
+                                    <div class="text-xs sm:text-sm font-black text-[#1e5cfb] truncate">
+                                        Rp {{ number_format($product->selling_price, 0, ',', '.') }}
+                                    </div>
+                                    
+                                    <div class="mt-0.5 sm:mt-1 text-[10px] font-bold">
+                                        @if($isOutOfStock)
+                                            <span class="text-rose-500">Stok: 0</span>
+                                        @elseif($isLowStock)
+                                            <span class="text-amber-500">Stok: {{ $product->stock }} (Menipis)</span>
+                                        @else
+                                            <span class="text-slate-400 font-semibold">Stok: {{ $product->stock }}</span>
+                                        @endif
+                                    </div>
                                 </div>
-                                
-                                <div class="mt-1.5 flex items-center justify-between text-[10px] font-bold">
-                                    @if($isOutOfStock)
-                                        <span class="text-rose-500">Stok: 0</span>
-                                    @elseif($isLowStock)
-                                        <span class="text-amber-500">Stok: {{ $product->stock }} (Menipis)</span>
-                                    @else
-                                        <span class="text-slate-400 font-semibold">Stok: {{ $product->stock }}</span>
-                                    @endif
+
+                                <div class="h-7 w-7 rounded-lg bg-blue-50 text-[#1e5cfb] group-hover:bg-[#1e5cfb] group-hover:text-white flex items-center justify-center transition shrink-0 ml-1 shadow-2xs">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                    </svg>
                                 </div>
                             </div>
                         </div>
@@ -347,7 +368,7 @@
                                 </svg>
                             </div>
                             <h4 class="text-sm font-bold text-slate-700">Belum Ada Barang</h4>
-                            <p class="text-slate-400 text-xs mt-1.5 max-w-sm mx-auto leading-relaxed">
+                            <p class="text-slate-400 text-xs mt-1.5 max-w-sm mx-auto leading-relaxed px-4">
                                 {{ $search ? 'Hasil pencarian barang tidak ditemukan.' : 'Silakan tambahkan barang terlebih dahulu melalui menu Data Barang untuk mulai melakukan transaksi.' }}
                             </p>
                         </div>
@@ -356,23 +377,74 @@
             </div>
         </div>
 
-        <!-- Right Side: POS Shopping Cart Panel -->
+        <!-- Sticky Floating Mobile Cart Trigger Bar (Visible on mobile/tablet when cart has items) -->
+        <div x-show="cart.length > 0" x-cloak
+             x-transition:enter="transition ease-out duration-300 transform"
+             x-transition:enter-start="translate-y-full opacity-0"
+             x-transition:enter-end="translate-y-0 opacity-100"
+             x-transition:leave="transition ease-in duration-200 transform"
+             x-transition:leave-start="translate-y-0 opacity-100"
+             x-transition:leave-end="translate-y-full opacity-0"
+             class="fixed bottom-0 inset-x-0 z-30 p-3 sm:p-4 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] lg:hidden">
+            <div class="max-w-xl mx-auto flex items-center justify-between gap-3">
+                <button type="button" @click="cartOpen = true" 
+                        class="w-full flex items-center justify-between gap-3 bg-[#1e5cfb] hover:bg-[#1a52db] text-white px-4 py-3 rounded-2xl shadow-md shadow-blue-500/20 active:scale-[0.99] transition cursor-pointer select-none"
+                        aria-label="Buka Keranjang Belanja">
+                    <div class="flex items-center gap-2.5 text-left min-w-0">
+                        <div class="relative flex items-center justify-center h-8 w-8 rounded-xl bg-white/20 shrink-0">
+                            <svg class="h-4.5 w-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                            </svg>
+                            <span class="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 bg-amber-400 text-slate-900 text-[9px] font-black rounded-full flex items-center justify-center shadow-xs" x-text="totalItemCount"></span>
+                        </div>
+                        <div class="min-w-0">
+                            <span class="text-xs font-black block leading-tight">Keranjang (<span x-text="totalItemCount"></span>)</span>
+                            <span class="text-[10px] text-blue-100 font-semibold block leading-tight">Rp <span x-text="total.toLocaleString('id-ID')"></span></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1 text-xs font-extrabold bg-white/15 px-3 py-1.5 rounded-xl shrink-0">
+                        <span>Lihat Keranjang</span>
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Cart Drawer Backdrop Overlay -->
+        <div x-show="cartOpen" @click="cartOpen = false" x-cloak
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 lg:hidden"></div>
+
+        <!-- Right Side: POS Shopping Cart Panel (Static on Desktop, Slide Drawer on Mobile/Tablet) -->
         <aside :class="cartOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'" 
-            class="fixed inset-y-0 right-0 z-40 lg:z-10 lg:static lg:inset-auto w-full sm:w-96 lg:w-100 bg-white border-l border-slate-200/80 flex flex-col justify-between transition-transform duration-300 ease-in-out shadow-lg lg:shadow-none">
+            class="fixed inset-y-0 right-0 z-50 lg:z-10 lg:static lg:inset-auto w-full max-w-full sm:max-w-md lg:w-96 xl:w-100 bg-white border-l border-slate-200/80 flex flex-col justify-between transition-transform duration-300 ease-in-out shadow-2xl lg:shadow-none">
             
-            <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-                <div class="flex items-center gap-2">
-                    <svg class="h-5.5 w-5.5 text-slate-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                    </svg>
-                    <h3 class="text-sm font-extrabold text-slate-800">Keranjang</h3>
+            <!-- Cart Header -->
+            <div class="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+                <div class="flex items-center gap-2.5">
+                    <div class="h-8 w-8 rounded-xl bg-blue-50 text-[#1e5cfb] flex items-center justify-center shrink-0">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-extrabold text-slate-800 leading-tight">Keranjang Belanja</h3>
+                        <span class="text-[10px] font-bold text-slate-400" x-text="totalItemCount + ' barang terpilih'"></span>
+                    </div>
                 </div>
-                <div class="flex items-center gap-3">
-                    <button type="button" @click="clearCart" x-show="cart.length > 0" class="text-xs font-bold text-rose-500 hover:text-rose-700 transition cursor-pointer">
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="clearCart" x-show="cart.length > 0" class="text-xs font-bold text-rose-500 hover:text-rose-700 px-2.5 py-1.5 rounded-lg hover:bg-rose-50 transition cursor-pointer">
                         Kosongkan
                     </button>
-                    <button @click="cartOpen = false" class="lg:hidden p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 focus:outline-none">
-                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <button type="button" @click="cartOpen = false" class="lg:hidden p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus:outline-none transition cursor-pointer" aria-label="Tutup Keranjang">
+                        <svg class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -380,10 +452,10 @@
             </div>
 
             <!-- Cart Items list -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-4">
+            <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
                 <div x-show="cart.length === 0" class="h-full flex flex-col items-center justify-center text-center text-slate-400 p-6">
-                    <div class="h-10 w-10 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-3">
-                        <svg class="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <div class="h-12 w-12 bg-slate-50 text-slate-300 rounded-2xl flex items-center justify-center mb-3">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                         </svg>
                     </div>
@@ -392,7 +464,7 @@
                 </div>
 
                 <template x-for="item in cart" :key="item.id">
-                    <div class="flex items-center gap-3.5 bg-slate-50/50 border border-slate-100 p-3.5 rounded-2xl relative">
+                    <div class="flex items-center gap-3 bg-slate-50/70 border border-slate-100 p-3 rounded-2xl relative transition hover:bg-slate-50">
                         <div class="h-12 w-12 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
                             <template x-if="item.image">
                                 <img :src="item.image" :alt="item.name" class="h-full w-full object-cover">
@@ -405,27 +477,27 @@
                         </div>
 
                         <div class="flex-1 min-w-0">
-                            <h4 class="text-xs font-bold text-slate-800 truncate" x-text="item.name">Teh Pucuk</h4>
+                            <h4 class="text-xs font-bold text-slate-800 truncate" :title="item.name" x-text="item.name">Teh Pucuk</h4>
                             <p class="text-[10px] text-slate-400 font-semibold mt-0.5">
                                 Rp <span x-text="item.selling_price.toLocaleString('id-ID')">4.000</span>
                             </p>
                             
-                            <div class="flex items-center gap-2 mt-2">
-                                <button type="button" @click="decreaseQty(item)" class="h-6 w-6 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-xs font-extrabold text-slate-600 transition cursor-pointer select-none">
+                            <div class="flex items-center gap-1.5 mt-2">
+                                <button type="button" @click="decreaseQty(item)" class="h-6 w-6 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-xs font-extrabold text-slate-600 transition cursor-pointer select-none" aria-label="Kurangi kuantitas">
                                     -
                                 </button>
-                                <span class="text-xs font-extrabold text-slate-800 w-6 text-center select-none" x-text="item.quantity">1</span>
-                                <button type="button" @click="increaseQty(item)" class="h-6 w-6 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-xs font-extrabold text-slate-600 transition cursor-pointer select-none">
+                                <span class="text-xs font-extrabold text-slate-800 min-w-[20px] text-center select-none" x-text="item.quantity">1</span>
+                                <button type="button" @click="increaseQty(item)" class="h-6 w-6 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-xs font-extrabold text-slate-600 transition cursor-pointer select-none" aria-label="Tambah kuantitas">
                                     +
                                 </button>
                             </div>
                         </div>
 
-                        <div class="text-right shrink-0">
+                        <div class="text-right shrink-0 flex flex-col items-end justify-between self-stretch">
                             <span class="text-xs font-extrabold text-slate-800 block">
                                 Rp <span x-text="(item.selling_price * item.quantity).toLocaleString('id-ID')">4.000</span>
                             </span>
-                            <button type="button" @click="removeFromCart(item)" class="text-[10px] font-bold text-rose-500 hover:text-rose-700 mt-2 transition cursor-pointer">
+                            <button type="button" @click="removeFromCart(item)" class="text-[10px] font-bold text-rose-500 hover:text-rose-700 hover:underline mt-1 transition cursor-pointer" aria-label="Hapus barang">
                                 Hapus
                             </button>
                         </div>
@@ -434,8 +506,8 @@
             </div>
 
             <!-- Cart Footer -->
-            <div class="p-6 border-t border-slate-100 shrink-0 bg-slate-50/50 space-y-4">
-                <div class="space-y-2.5 text-xs font-bold text-slate-500">
+            <div class="p-4 sm:p-6 border-t border-slate-100 shrink-0 bg-slate-50/70 space-y-3.5">
+                <div class="space-y-2 text-xs font-bold text-slate-500">
                     <div class="flex justify-between items-center">
                         <span>Subtotal</span>
                         <span class="text-slate-800">
@@ -447,17 +519,17 @@
                         <span class="text-rose-500">- Rp 0</span>
                     </div>
                     
-                    <div class="flex justify-between items-end border-t border-slate-200/50 pt-3.5 mt-1">
+                    <div class="flex justify-between items-end border-t border-slate-200/60 pt-3 mt-1">
                         <span class="text-slate-800 font-extrabold">Total Tagihan</span>
-                        <span class="text-2xl font-black text-[#1e5cfb] tracking-tight">
+                        <span class="text-xl sm:text-2xl font-black text-[#1e5cfb] tracking-tight">
                             Rp <span x-text="total.toLocaleString('id-ID')">0</span>
                         </span>
                     </div>
                 </div>
 
                 <button type="button" @click="openPayment" :disabled="cart.length === 0"
-                    class="w-full bg-[#1e5cfb] hover:bg-[#1a52db] disabled:bg-slate-200 disabled:text-slate-400 text-white py-3.5 rounded-xl text-sm font-bold shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.99] transition duration-150 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed disabled:shadow-none select-none">
-                    <span>Bayar</span>
+                    class="w-full bg-[#1e5cfb] hover:bg-[#1a52db] disabled:bg-slate-200 disabled:text-slate-400 text-white py-3 sm:py-3.5 rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.99] transition duration-150 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed disabled:shadow-none select-none">
+                    <span>Lanjut Pembayaran</span>
                     <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                     </svg>
@@ -469,18 +541,25 @@
 
     <!-- PAYMENT WORKFLOW MODAL OVERLAY (Alpine.js Interactive) -->
     <div x-show="showPaymentModal" 
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm"
         x-cloak>
         
         <div @click.away="showPaymentModal = false"
-            :class="showQrisConfirmStep ? 'max-w-md p-8 text-center' : 'max-w-4xl p-6 flex flex-col md:flex-row gap-6'"
-            class="bg-white rounded-3xl border border-slate-200/80 shadow-2xl w-full max-h-[90vh] overflow-y-auto transition-all duration-300"
+            :class="showQrisConfirmStep ? 'max-w-md p-5 sm:p-8 text-center' : 'max-w-4xl p-4 sm:p-6 flex flex-col md:flex-row gap-5 sm:gap-6'"
+            class="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-2xl w-full max-h-[92vh] overflow-y-auto transition-all duration-300 relative"
             x-transition:enter="ease-out duration-300"
             x-transition:enter-start="scale-95 opacity-0"
             x-transition:enter-end="scale-100 opacity-100">
+
+            <!-- Mobile Modal Close Button -->
+            <button type="button" @click="showPaymentModal = false" class="absolute top-3.5 right-3.5 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition md:hidden cursor-pointer" aria-label="Tutup Dialog Pembayaran">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
             
             <!-- Step 1: Payment Parameters and Summary (visible when not in QRIS confirm stage) -->
-            <div x-show="!showQrisConfirmStep" class="w-full flex flex-col md:flex-row gap-6">
+            <div x-show="!showQrisConfirmStep" class="w-full flex flex-col md:flex-row gap-5 sm:gap-6">
                 <!-- Left Side: Payment Parameters -->
                 <div class="flex-1 space-y-5">
                     <div>
@@ -805,7 +884,7 @@
                 </div>
 
                 <!-- QRIS Image Container -->
-                <div class="aspect-square w-64 h-64 bg-slate-50 border border-slate-200/80 rounded-2xl mx-auto flex flex-col items-center justify-center p-4">
+                <div class="aspect-square w-full max-w-[240px] sm:max-w-[260px] bg-slate-50 border border-slate-200/80 rounded-2xl mx-auto flex flex-col items-center justify-center p-3 sm:p-4">
                     @php
                         $storeSettings = \App\Models\StoreSetting::current();
                         $qrisPath = $storeSettings->qris_image;
