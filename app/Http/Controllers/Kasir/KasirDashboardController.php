@@ -16,18 +16,19 @@ class KasirDashboardController extends Controller
      */
     public function index()
     {
-        $today = Carbon::today();
+        $startOfDay = Carbon::today()->startOfDay();
+        $endOfDay = Carbon::today()->endOfDay();
         $user = Auth::user();
 
         // Count today's valid sales transactions processed by the current cashier
         $todayTransactionCount = Transaction::where('user_id', $user->id)
-            ->whereDate('created_at', $today)
+            ->whereBetween('created_at', [$startOfDay, $endOfDay])
             ->count();
 
         // Recent 5 transactions processed by current cashier today
         $recentTransactions = Transaction::with('items.product')
             ->where('user_id', $user->id)
-            ->whereDate('created_at', $today)
+            ->whereBetween('created_at', [$startOfDay, $endOfDay])
             ->latest()
             ->take(5)
             ->get();

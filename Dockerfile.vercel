@@ -34,6 +34,9 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . /var/www/html
 
+# Load production OPcache configuration
+COPY docker/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+
 # Copy built frontend assets from Stage 1
 COPY --from=frontend /app/public/build /var/www/html/public/build
 

@@ -87,8 +87,7 @@
                                 @php
                                     $totalDebt = $customer->total_debt;
                                     $hasDebt = $totalDebt > 0;
-                                    $lastTrx = $customer->transactions()->latest()->first();
-                                    $lastTrxDate = $lastTrx ? $lastTrx->created_at->format('d M Y, H:i') : '-';
+                                    $lastTrxDate = $customer->last_transaction_date ? \Carbon\Carbon::parse($customer->last_transaction_date)->format('d M Y, H:i') : '-';
                                 @endphp
                                 <tr class="hover:bg-slate-50/40 transition duration-150">
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-800">

@@ -47,6 +47,12 @@ class Customer extends Model
      */
     public function getTotalDebtAttribute()
     {
+        if (array_key_exists('total_transaction_debt', $this->attributes)) {
+            $transactionDebt = (float) ($this->attributes['total_transaction_debt'] ?? 0);
+            $paidOff = (float) ($this->attributes['total_paid_off'] ?? 0);
+            return max(0, $transactionDebt - $paidOff);
+        }
+
         $transactionDebt = (float) $this->transactions()->sum('remaining_amount');
         $paidOff = (float) $this->debtPayments()->sum('amount');
         return max(0, $transactionDebt - $paidOff);

@@ -9,6 +9,7 @@ use App\Models\DebtPayment;
 use App\Models\Customer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class LaporanController extends Controller
 {
@@ -36,29 +37,17 @@ class LaporanController extends Controller
         $prevTotalSales = (float) Transaction::whereBetween('created_at', [$prevStartDate, $prevEndDate])->sum('total');
         $salesChangePercent = $prevTotalSales > 0 ? round((($totalSales - $prevTotalSales) / $prevTotalSales) * 100, 1) : null;
 
-        // Current period items & profit
-        $items = TransactionItem::whereHas('transaction', function ($q) use ($startDate, $endDate) {
-            $q->whereBetween('created_at', [$startDate, $endDate]);
-        })->with(['transaction', 'product' => function ($q) {
-            $q->withTrashed();
-        }])->get();
+        // Current period profit
+        $totalProfit = (float) TransactionItem::join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+            ->join('products', 'transaction_items.product_id', '=', 'products.id')
+            ->whereBetween('transactions.created_at', [$startDate, $endDate])
+            ->sum(DB::raw('(transaction_items.price - coalesce(transaction_items.cost_price, products.cost_price, 0)) * transaction_items.quantity'));
 
-        $totalProfit = (float) $items->sum(function ($item) {
-            $cost = $item->cost_price ?? (optional($item->product)->cost_price ?? 0);
-            return ((float) $item->price - (float) $cost) * (int) $item->quantity;
-        });
-
-        // Previous period items & profit
-        $prevItems = TransactionItem::whereHas('transaction', function ($q) use ($prevStartDate, $prevEndDate) {
-            $q->whereBetween('created_at', [$prevStartDate, $prevEndDate]);
-        })->with(['product' => function ($q) {
-            $q->withTrashed();
-        }])->get();
-
-        $prevTotalProfit = (float) $prevItems->sum(function ($item) {
-            $cost = $item->cost_price ?? (optional($item->product)->cost_price ?? 0);
-            return ((float) $item->price - (float) $cost) * (int) $item->quantity;
-        });
+        // Previous period profit
+        $prevTotalProfit = (float) TransactionItem::join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+            ->join('products', 'transaction_items.product_id', '=', 'products.id')
+            ->whereBetween('transactions.created_at', [$prevStartDate, $prevEndDate])
+            ->sum(DB::raw('(transaction_items.price - coalesce(transaction_items.cost_price, products.cost_price, 0)) * transaction_items.quantity'));
 
         $profitChangePercent = $prevTotalProfit > 0 ? round((($totalProfit - $prevTotalProfit) / $prevTotalProfit) * 100, 1) : null;
 
@@ -68,12 +57,22 @@ class LaporanController extends Controller
         $transactionCountChange = $transactionCount - $prevTransactionCount;
 
         // Total items sold
-        $itemsSold = (int) $items->sum('quantity');
-        $prevItemsSold = (int) $prevItems->sum('quantity');
+        $itemsSold = (int) TransactionItem::join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+            ->whereBetween('transactions.created_at', [$startDate, $endDate])
+            ->sum('transaction_items.quantity');
+
+        $prevItemsSold = (int) TransactionItem::join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+            ->whereBetween('transactions.created_at', [$prevStartDate, $prevEndDate])
+            ->sum('transaction_items.quantity');
         $itemsSoldChange = $itemsSold - $prevItemsSold;
 
-        // 2. Payment Method Distribution
-        $transactionsInPeriod = Transaction::whereBetween('created_at', [$startDate, $endDate])->get();
+        // 2. Payment Method Distribution (Single GroupBy Query)
+        $paymentMethodSummary = Transaction::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('payment_method, count(*) as count, sum(total) as total, sum(amount_paid) as paid, sum(remaining_amount) as debt')
+            ->groupBy('payment_method')
+            ->get()
+            ->keyBy('payment_method');
+
         $paymentMethodsData = [
             'cash' => ['count' => 0, 'total' => 0, 'paid' => 0, 'debt' => 0],
             'qris' => ['count' => 0, 'total' => 0, 'paid' => 0, 'debt' => 0],
@@ -82,56 +81,70 @@ class LaporanController extends Controller
             'qris_debt' => ['count' => 0, 'total' => 0, 'paid' => 0, 'debt' => 0],
         ];
 
-        foreach ($transactionsInPeriod as $trx) {
-            $method = $trx->payment_method;
+        $creditSalesTotal = 0;
+        $newDebtGenerated = 0;
+
+        foreach ($paymentMethodSummary as $method => $row) {
             if (isset($paymentMethodsData[$method])) {
-                $paymentMethodsData[$method]['count']++;
-                $paymentMethodsData[$method]['total'] += (float) $trx->total;
-                $paymentMethodsData[$method]['paid'] += (float) $trx->amount_paid;
-                $paymentMethodsData[$method]['debt'] += (float) $trx->remaining_amount;
+                $paymentMethodsData[$method] = [
+                    'count' => (int) $row->count,
+                    'total' => (float) $row->total,
+                    'paid' => (float) $row->paid,
+                    'debt' => (float) $row->debt,
+                ];
             }
+            if (in_array($method, ['debt', 'cash_debt', 'qris_debt'])) {
+                $creditSalesTotal += (float) $row->total;
+            }
+            $newDebtGenerated += (float) $row->debt;
         }
 
         // 3. Debt Summary
-        $creditSalesTotal = (float) $transactionsInPeriod->whereIn('payment_method', ['debt', 'cash_debt', 'qris_debt'])->sum('total');
-        $newDebtGenerated = (float) $transactionsInPeriod->sum('remaining_amount');
         $debtPaymentsCollected = (float) DebtPayment::whereBetween('created_at', [$startDate, $endDate])->sum('amount');
         
-        // Total customer outstanding debt currently
-        $allCustomers = Customer::all();
-        $totalCustomerDebt = (float) $allCustomers->sum('total_debt');
-
-        // 4. Trend Charts Data Generation
-        $trendData = $this->generateTrendData($period, $startDate, $endDate, $transactionsInPeriod, $items);
-
-        // 5. Product Rankings
-        $groupedByProduct = $items->groupBy('product_id');
-        $productRankings = collect();
-
-        foreach ($groupedByProduct as $productId => $prodItems) {
-            $firstItem = $prodItems->first();
-            $productName = optional($firstItem->product)->name ?? 'Produk tidak tersedia';
-            $sku = optional($firstItem->product)->sku ?? '-';
-            
-            $qtySold = (int) $prodItems->sum('quantity');
-            $salesAmount = (float) $prodItems->sum('subtotal');
-            $profitAmount = (float) $prodItems->sum(function ($item) {
-                $cost = $item->cost_price ?? (optional($item->product)->cost_price ?? 0);
-                return ((float) $item->price - (float) $cost) * (int) $item->quantity;
+        // Total customer outstanding debt currently (Single aggregated query)
+        $totalCustomerDebt = (float) Customer::withSum('transactions as total_tx_debt', 'remaining_amount')
+            ->withSum('debtPayments as total_paid', 'amount')
+            ->get()
+            ->sum(function ($c) {
+                return max(0, (float)($c->total_tx_debt ?? 0) - (float)($c->total_paid ?? 0));
             });
 
-            $productRankings->push([
-                'product_id' => $productId,
-                'name' => $productName,
-                'sku' => $sku,
-                'qty_sold' => $qtySold,
-                'sales' => $salesAmount,
-                'profit' => $profitAmount,
-            ]);
-        }
+        // 4. Trend Charts Data Generation
+        $trendData = $this->generateTrendData($period, $startDate, $endDate);
 
-        $topSellingProducts = $productRankings->sortByDesc('qty_sold')->take(5)->values();
-        $topProfitProducts = $productRankings->sortByDesc('profit')->take(5)->values();
+        // 5. Product Rankings (Direct SQL GroupBy)
+        $productRankingsRaw = TransactionItem::join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+            ->join('products', 'transaction_items.product_id', '=', 'products.id')
+            ->whereBetween('transactions.created_at', [$startDate, $endDate])
+            ->selectRaw('
+                products.id as product_id,
+                products.name as name,
+                products.sku as sku,
+                sum(transaction_items.quantity) as qty_sold,
+                sum(transaction_items.subtotal) as sales,
+                sum((transaction_items.price - coalesce(transaction_items.cost_price, products.cost_price, 0)) * transaction_items.quantity) as profit
+            ')
+            ->groupBy('products.id', 'products.name', 'products.sku')
+            ->get();
+
+        $topSellingProducts = $productRankingsRaw->sortByDesc(fn($p) => (int)$p->qty_sold)->take(5)->map(fn($p) => [
+            'product_id' => $p->product_id,
+            'name' => $p->name,
+            'sku' => $p->sku,
+            'qty_sold' => (int) $p->qty_sold,
+            'sales' => (float) $p->sales,
+            'profit' => (float) $p->profit,
+        ])->values();
+
+        $topProfitProducts = $productRankingsRaw->sortByDesc(fn($p) => (float)$p->profit)->take(5)->map(fn($p) => [
+            'product_id' => $p->product_id,
+            'name' => $p->name,
+            'sku' => $p->sku,
+            'qty_sold' => (int) $p->qty_sold,
+            'sales' => (float) $p->sales,
+            'profit' => (float) $p->profit,
+        ])->values();
 
         // 6. Transaction Recap (Paginated)
         $recapTransactions = Transaction::whereBetween('created_at', [$startDate, $endDate])
@@ -325,88 +338,85 @@ class LaporanController extends Controller
     /**
      * Generate trend chart dataset (Sales & Profit over time).
      */
-    private function generateTrendData(string $period, Carbon $startDate, Carbon $endDate, $transactions, $items): array
+    private function generateTrendData(string $period, Carbon $startDate, Carbon $endDate): array
     {
         $labels = [];
         $salesData = [];
         $profitData = [];
 
+        $driver = DB::connection()->getDriverName();
+        $isSqlite = $driver === 'sqlite';
+
         if ($period === 'harian') {
-            // Group by hour 00:00 to 23:00
+            $hourExpr = $isSqlite ? "cast(strftime('%H', created_at) as integer)" : "HOUR(created_at)";
+            $txHourExpr = $isSqlite ? "cast(strftime('%H', transactions.created_at) as integer)" : "HOUR(transactions.created_at)";
+
+            $salesGroup = Transaction::whereBetween('created_at', [$startDate, $endDate])
+                ->selectRaw("{$hourExpr} as hour_key, sum(total) as total_sales")
+                ->groupBy('hour_key')
+                ->pluck('total_sales', 'hour_key')
+                ->mapWithKeys(fn($val, $key) => [(int)$key => (float)$val]);
+
+            $profitGroup = TransactionItem::join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+                ->join('products', 'transaction_items.product_id', '=', 'products.id')
+                ->whereBetween('transactions.created_at', [$startDate, $endDate])
+                ->selectRaw("{$txHourExpr} as hour_key, sum((transaction_items.price - coalesce(transaction_items.cost_price, products.cost_price, 0)) * transaction_items.quantity) as total_profit")
+                ->groupBy('hour_key')
+                ->pluck('total_profit', 'hour_key')
+                ->mapWithKeys(fn($val, $key) => [(int)$key => (float)$val]);
+
             for ($h = 0; $h < 24; $h++) {
                 $labels[] = sprintf('%02d:00', $h);
-                $salesData[] = 0;
-                $profitData[] = 0;
-            }
-
-            foreach ($transactions as $trx) {
-                $hour = (int) $trx->created_at->format('H');
-                if (isset($salesData[$hour])) {
-                    $salesData[$hour] += (float) $trx->total;
-                }
-            }
-
-            foreach ($items as $item) {
-                $hour = (int) $item->transaction->created_at->format('H');
-                if (isset($profitData[$hour])) {
-                    $cost = $item->cost_price ?? (optional($item->product)->cost_price ?? 0);
-                    $profitData[$hour] += ((float) $item->price - (float) $cost) * (int) $item->quantity;
-                }
+                $salesData[] = (float) ($salesGroup[$h] ?? 0);
+                $profitData[] = (float) ($profitGroup[$h] ?? 0);
             }
         } elseif ($period === 'tahunan') {
-            // Group by month 1 to 12
+            $monthExpr = $isSqlite ? "cast(strftime('%m', created_at) as integer)" : "MONTH(created_at)";
+            $txMonthExpr = $isSqlite ? "cast(strftime('%m', transactions.created_at) as integer)" : "MONTH(transactions.created_at)";
+
+            $salesGroup = Transaction::whereBetween('created_at', [$startDate, $endDate])
+                ->selectRaw("{$monthExpr} as month_key, sum(total) as total_sales")
+                ->groupBy('month_key')
+                ->pluck('total_sales', 'month_key')
+                ->mapWithKeys(fn($val, $key) => [(int)$key => (float)$val]);
+
+            $profitGroup = TransactionItem::join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+                ->join('products', 'transaction_items.product_id', '=', 'products.id')
+                ->whereBetween('transactions.created_at', [$startDate, $endDate])
+                ->selectRaw("{$txMonthExpr} as month_key, sum((transaction_items.price - coalesce(transaction_items.cost_price, products.cost_price, 0)) * transaction_items.quantity) as total_profit")
+                ->groupBy('month_key')
+                ->pluck('total_profit', 'month_key')
+                ->mapWithKeys(fn($val, $key) => [(int)$key => (float)$val]);
+
             $monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
             for ($m = 1; $m <= 12; $m++) {
                 $labels[] = $monthNames[$m - 1];
-                $salesData[] = 0;
-                $profitData[] = 0;
-            }
-
-            foreach ($transactions as $trx) {
-                $m = (int) $trx->created_at->format('n') - 1;
-                if (isset($salesData[$m])) {
-                    $salesData[$m] += (float) $trx->total;
-                }
-            }
-
-            foreach ($items as $item) {
-                $m = (int) $item->transaction->created_at->format('n') - 1;
-                if (isset($profitData[$m])) {
-                    $cost = $item->cost_price ?? (optional($item->product)->cost_price ?? 0);
-                    $profitData[$m] += ((float) $item->price - (float) $cost) * (int) $item->quantity;
-                }
+                $salesData[] = (float) ($salesGroup[$m] ?? 0);
+                $profitData[] = (float) ($profitGroup[$m] ?? 0);
             }
         } else {
-            // Daily grouping for mingguan, bulanan, or custom
-            $current = $startDate->copy()->startOfDay();
-            $dateMap = [];
-            $index = 0;
+            $dateExpr = $isSqlite ? "date(created_at)" : "DATE(created_at)";
+            $txDateExpr = $isSqlite ? "date(transactions.created_at)" : "DATE(transactions.created_at)";
 
+            $salesGroup = Transaction::whereBetween('created_at', [$startDate, $endDate])
+                ->selectRaw("{$dateExpr} as date_key, sum(total) as total_sales")
+                ->groupBy('date_key')
+                ->pluck('total_sales', 'date_key');
+
+            $profitGroup = TransactionItem::join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+                ->join('products', 'transaction_items.product_id', '=', 'products.id')
+                ->whereBetween('transactions.created_at', [$startDate, $endDate])
+                ->selectRaw("{$txDateExpr} as date_key, sum((transaction_items.price - coalesce(transaction_items.cost_price, products.cost_price, 0)) * transaction_items.quantity) as total_profit")
+                ->groupBy('date_key')
+                ->pluck('total_profit', 'date_key');
+
+            $current = $startDate->copy()->startOfDay();
             while ($current->lte($endDate)) {
                 $dateKey = $current->format('Y-m-d');
                 $labels[] = $current->format('d M');
-                $salesData[] = 0;
-                $profitData[] = 0;
-                $dateMap[$dateKey] = $index;
-                $index++;
+                $salesData[] = (float) ($salesGroup[$dateKey] ?? 0);
+                $profitData[] = (float) ($profitGroup[$dateKey] ?? 0);
                 $current->addDay();
-            }
-
-            foreach ($transactions as $trx) {
-                $dateKey = $trx->created_at->format('Y-m-d');
-                if (isset($dateMap[$dateKey])) {
-                    $idx = $dateMap[$dateKey];
-                    $salesData[$idx] += (float) $trx->total;
-                }
-            }
-
-            foreach ($items as $item) {
-                $dateKey = $item->transaction->created_at->format('Y-m-d');
-                if (isset($dateMap[$dateKey])) {
-                    $idx = $dateMap[$dateKey];
-                    $cost = $item->cost_price ?? (optional($item->product)->cost_price ?? 0);
-                    $profitData[$idx] += ((float) $item->price - (float) $cost) * (int) $item->quantity;
-                }
             }
         }
 

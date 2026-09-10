@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class Product extends Model
@@ -55,6 +56,18 @@ class Product extends Model
             if (empty($product->sku)) {
                 $product->sku = self::generateUniqueSku($product->category_id);
             }
+        });
+
+        static::saved(function () {
+            Cache::forget('global_low_stock_products');
+        });
+
+        static::deleted(function () {
+            Cache::forget('global_low_stock_products');
+        });
+
+        static::restored(function () {
+            Cache::forget('global_low_stock_products');
         });
     }
 

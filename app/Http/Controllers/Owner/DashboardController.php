@@ -16,24 +16,31 @@ class DashboardController extends Controller
      */
     public function index()
     {
+        $startOfDay = now()->startOfDay();
+        $endOfDay = now()->endOfDay();
+
         // Card 1: Penjualan Hari Ini
-        $salesToday = Transaction::whereDate('created_at', today())->sum('total');
+        $salesToday = Transaction::whereBetween('created_at', [$startOfDay, $endOfDay])->sum('total');
 
         // Card 2: Keuntungan Hari Ini
         // Join with products table to calculate dynamically using selling price minus cost price
-        $profitToday = TransactionItem::whereDate('transaction_items.created_at', today())
+        $profitToday = TransactionItem::whereBetween('transaction_items.created_at', [$startOfDay, $endOfDay])
             ->join('products', 'transaction_items.product_id', '=', 'products.id')
-            ->sum(DB::raw('(transaction_items.price - products.cost_price) * transaction_items.quantity'));
+            ->sum(DB::raw('(transaction_items.price - coalesce(transaction_items.cost_price, products.cost_price, 0)) * transaction_items.quantity'));
 
         // Card 3: Jumlah Transaksi
-        $transactionCountToday = Transaction::whereDate('created_at', today())->count();
+        $transactionCountToday = Transaction::whereBetween('created_at', [$startOfDay, $endOfDay])->count();
 
         // Card 4: Barang Terjual
-        $itemsSoldToday = TransactionItem::whereDate('created_at', today())->sum('quantity');
+        $itemsSoldToday = TransactionItem::whereBetween('created_at', [$startOfDay, $endOfDay])->sum('quantity');
 
         // Sales Trend chart data (Last 7 Days)
-        $salesTrendData = Transaction::whereDate('created_at', '>=', now()->subDays(6))
-            ->selectRaw('DATE(created_at) as date, SUM(total) as total')
+        $startOfTrend = now()->subDays(6)->startOfDay();
+        $driver = DB::connection()->getDriverName();
+        $dateExpr = $driver === 'sqlite' ? "date(created_at)" : "DATE(created_at)";
+
+        $salesTrendData = Transaction::whereBetween('created_at', [$startOfTrend, $endOfDay])
+            ->selectRaw("{$dateExpr} as date, SUM(total) as total")
             ->groupBy('date')
             ->pluck('total', 'date');
 

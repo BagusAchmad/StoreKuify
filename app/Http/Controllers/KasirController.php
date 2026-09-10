@@ -25,16 +25,24 @@ class KasirController extends Controller
         // Retrieve active categories
         $categories = Category::where('is_active', true)->orderBy('name', 'asc')->get();
 
-        // Retrieve all customers for debt/credit checkout selection
-        $customers = Customer::orderBy('name', 'asc')->get()->map(function ($customer) {
-            // Append dynamic attributes for Alpine.js visibility
-            return [
-                'id' => $customer->id,
-                'name' => $customer->name,
-                'phone' => $customer->phone ?: '-',
-                'total_debt' => $customer->total_debt,
-            ];
-        });
+        // Retrieve all customers for debt/credit checkout selection with aggregated debt
+        $customers = Customer::withSum('transactions as total_transaction_debt', 'remaining_amount')
+            ->withSum('debtPayments as total_paid_off', 'amount')
+            ->orderBy('name', 'asc')
+            ->get()
+            ->map(function ($customer) {
+                $transactionDebt = (float) ($customer->total_transaction_debt ?? 0);
+                $paidOff = (float) ($customer->total_paid_off ?? 0);
+                $totalDebt = max(0, $transactionDebt - $paidOff);
+
+                // Append dynamic attributes for Alpine.js visibility
+                return [
+                    'id' => $customer->id,
+                    'name' => $customer->name,
+                    'phone' => $customer->phone ?: '-',
+                    'total_debt' => $totalDebt,
+                ];
+            });
 
         // Query active products
         $query = Product::where('is_active', true);

@@ -18,7 +18,10 @@ class HutangController extends Controller
     {
         $search = $request->input('search');
         
-        $query = Customer::query();
+        $query = Customer::query()
+            ->withSum('transactions as total_transaction_debt', 'remaining_amount')
+            ->withSum('debtPayments as total_paid_off', 'amount')
+            ->withMax('transactions as last_transaction_date', 'created_at');
         
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
